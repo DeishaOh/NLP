@@ -1,0 +1,106 @@
+#--------------------------------------------------------------------------------------------------------------------------------import
+from flask import Flask, render_template, request
+from werkzeug.utils import secure_filename
+import konlpy
+import urllib.request
+import speech_recognition as sr
+import librosa.display
+import IPython.display as ipd
+import matplotlib.pyplot as plt
+import sys
+import sklearn
+ 
+import re
+import nltk
+import pandas as pd
+import codecs
+from nltk.corpus import stopwords
+from gensim.parsing.preprocessing import preprocess_string
+from konlpy.tag import Mecab
+from wordcloud import WordCloud
+from collections import Counter
+#--------------------------------------------------------------------------------------------------------------------------------module
+mecab = Mecab(dicpath=r"C:\mecab\mecab-ko-dic")
+#wc = WordCloud(background_color = 'white', font_path = 'C:\/indows/Fonts/NanumGothic.ttf')
+#plt.style.use('seaborn-white')
+r = sr.Recognizer()
+stop_words = ['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한',
+              '하다','사기', '때', '저희','삼','카드','쪽','십','사용','가능','이거','범','경우',
+             '이게', '부분','그거','제','말씀','아줌마','수','원','동영상','내','나','곳','예','만','번',
+              '그건','남자','지금','데','것','건','게','테','저','건데','사','건가요','네','시','년','책',
+             '분','수원','달','하루','네','그쪽','사','박스','정도','이쪽','포장','이해','회사','근무','칠',
+              '거기','차','전','앞','어디','그분','만약','이름','여기','겁니다','뭐','명','내역','말','잠시',
+              '중','얘기','다음','정보','적','사람','선생','하나','농협','월','개','일','방법','오','천','방법',
+              '팔','확인','이용','점','그게','고인','예','정도','만','원','선','쪽','대략','다음','본인','거']
+phishing_list = ['감독원','입증','계좌','유출','금융','통장','은행','계좌','사건','금융',
+                 '조사','수사','명의','자금','개설','진술','녹취','피해','처리','감독원',
+                 '검사','직원','입출금','입증','불법','수사관','대출','범죄','추적']
+#--------------------------------------------------------------------------------------------------------------------------------flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def upload_file():
+    return render_template('index.html')
+
+@app.route('/result', methods=['GET', 'POST'])
+def uploader_file(): #----------------------파일 업로드 기능
+    if request.method == 'POST':
+        f = request.files['file']
+        fs = secure_filename(f.filename)#---파일 암호화
+        f.save(fs)
+#--------------------------------------------------------------------------------------------------------------------------------recog
+        korean_audio = sr.AudioFile(fs)
+
+        with korean_audio as source:
+            audio = r.record(source)
+
+        voice_text = r.recognize_google(audio_data = audio, language = 'ko-KR')
+#--------------------------------------------------------------------------------------------------------------------------------list
+        voice_text_list = []
+        voice_text_list.append(voice_text)
+        print('voice_text_list는')
+        print(voice_text_list)
+#--------------------------------------------------------------------------------------------------------------------------------mecab    
+        voices = []
+        for i in voice_text_list:
+            for noun in mecab.nouns(i):
+                voices.append(noun)
+        print('voices는')
+        print(voices)
+#--------------------------------------------------------------------------------------------------------------------------------top_nouns    
+        nouns_counter = Counter(voices)
+        top_nouns = dict(nouns_counter.most_common(50)) # 빈도가 가장 높은 50개만 가져와라
+#--------------------------------------------------------------------------------------------------------------------------------dict-item        
+        top_nouns_items = list(top_nouns.items())
+        print('top_nouns_items는')
+        print(top_nouns_items)
+#--------------------------------------------------------------------------------------------------------------------------------stopword/phishingword
+        ex_phishing_list = []
+        for i in range(len(top_nouns_items)):
+            if top_nouns_items[i][0] in phishing_list:
+                ex_phishing_list.append(top_nouns_items[i])
+        print('ex_phishing_list는')
+        print(ex_phishing_list)
+#--------------------------------------------------------------------------------------------------------------------------------top_words
+        top_phishing_word = []
+        for i in range(len(ex_phishing_list)):
+            top_phishing_word.append(ex_phishing_list[i])
+        print('top_phishing_word는')
+        print(top_phishing_word)
+#--------------------------------------------------------------------------------------------------------------------------------export    
+        phishing_script = voice_text
+        phishing_percent = (len(ex_phishing_list)/len(top_nouns_items)) * 100
+        phishing_top_word = []
+        for i in range(len(top_phishing_word)):
+            phishing_top_word.append(top_phishing_word[i][0])
+
+        for i in range(len(phishing_top_word)):
+            print('phishing_top_{}은'.format(i+1))
+            print(phishing_top_word[i])  
+        
+        
+        return render_template('result.html', daesa = phishing_script, percent = phishing_percent, top = phishing_top_word)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0')
