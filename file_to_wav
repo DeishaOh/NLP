@@ -1,0 +1,7 @@
+import os
+import subprocess
+
+for i in range(221):
+    command = "ffmpeg -i {}.mp4 -ab 160k -ac 2 -ar 44100 -vn {}.wav".format(i+1, i+1)
+    subprocess.call(command, shell=True)
+#subprocess.call(command, shell=True)
